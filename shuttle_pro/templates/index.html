@@ -1,0 +1,147 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UrbanXpress - Smart Shuttle System</title>
+  <link rel="stylesheet" href="{% static 'css/index.css' %}">
+</head>
+<body>
+
+  <!-- Toast Messages -->
+  <div id="toast-container">
+    {% for message in messages %}
+      <div class="toast {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="logo">Urban<span>Xpress</span></div>
+    <ul class="nav-links">
+      <li><a href="{% url 'home' %}" class="active">Home</a></li>
+      <li><a href="{% url 'booking' %}">Booking</a></li>
+      <li><a href="{% url 'track2' %}">Tracking</a></li>
+      <li><a href="{% url 'operator' %}">Operator</a></li>
+    </ul>
+    <div class="hamburger">&#9776;</div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="content" id="content">
+      {% if not user.is_authenticated %}
+      <button id="loginBtn" class="popup-btn">Login / Sign Up</button>
+      {% endif %}
+
+      <!-- Popup Overlay -->
+      <div class="overlay" id="overlay">
+        <div class="auth-box" onclick="event.stopPropagation()">
+          <div class="tab-buttons">
+            <button id="loginTab" class="active" onclick="showLogin()">Login</button>
+            <button id="signupTab" onclick="showSignup()">Sign Up</button>
+          </div>
+
+          <div class="form-container" id="loginForm">
+            <h2>Welcome Back</h2>
+            <input type="text" placeholder="Username" />
+            <input type="password" placeholder="Password" />
+            <button type="submit">Login</button>
+          </div>
+
+          <div class="form-container" id="signupForm" style="display: none;">
+            <h2>Create Account</h2>
+            <input type="text" placeholder="Username" />
+            <input type="email" placeholder="Email" />
+            <input type="password" placeholder="Password" />
+            <button type="submit">Sign Up</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h1>Smart, Reliable, and Urban Mobility</h1>
+    <p>UrbanXpress helps people travel smarter with fast, affordable, and eco-friendly shuttles.</p>
+    <a href="{% url 'booking' %}" class="cta-btn">Book Your Ride</a>
+  </section>
+
+  <!-- Scripts -->
+  <script>
+    // Toast removal
+    document.addEventListener("DOMContentLoaded", () => {
+      const toasts = document.querySelectorAll(".toast");
+      toasts.forEach(t => { setTimeout(() => t.remove(), 3500); });
+    });
+
+    const overlay = document.getElementById("overlay");
+    const loginBtn = document.getElementById("loginBtn");
+
+    {% if user.is_authenticated %}
+      // Show logout button
+      const btn = document.createElement("button");
+      btn.className = "popup-btn";
+      btn.innerText = "Logout";
+      btn.onclick = () => { window.location.href="{% url 'logout' %}"; };
+      document.getElementById("content").prepend(btn);
+      overlay.style.display = "none";
+    {% else %}
+      loginBtn.addEventListener("click", () => { overlay.style.display = "flex"; });
+    {% endif %}
+
+    // Switch forms
+    function showLogin() {
+        document.getElementById("loginForm").style.display = "block";
+        document.getElementById("signupForm").style.display = "none";
+        document.getElementById("loginTab").classList.add("active");
+        document.getElementById("signupTab").classList.remove("active");
+    }
+    function showSignup() {
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("signupForm").style.display = "block";
+        document.getElementById("signupTab").classList.add("active");
+        document.getElementById("loginTab").classList.remove("active");
+    }
+
+    // AJAX login
+    document.getElementById("loginForm").querySelector("button").addEventListener("click", function(e){
+        e.preventDefault();
+        const username = document.querySelector("#loginForm input[placeholder='Username']").value;
+        const password = document.querySelector("#loginForm input[placeholder='Password']").value;
+        fetch("{% url 'login' %}", {
+            method: "POST",
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            body: new URLSearchParams({username, password})
+        }).then(res => res.json()).then(data=>{
+            if(data.success){ window.location.href = "{% url 'booking' %}"; }
+            else{ alert(data.error); }
+        });
+    });
+
+    // AJAX signup
+    document.getElementById("signupForm").querySelector("button").addEventListener("click", function(e){
+        e.preventDefault();
+        const username = document.querySelector("#signupForm input[placeholder='Username']").value;
+        const email = document.querySelector("#signupForm input[placeholder='Email']").value;
+        const password = document.querySelector("#signupForm input[placeholder='Password']").value;
+        fetch("{% url 'signup' %}", {
+            method: "POST",
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            body: new URLSearchParams({username, email, password})
+        }).then(res => res.json()).then(data=>{
+            if(data.success){ window.location.href = "{% url 'booking' %}"; }
+            else{ alert(data.error); }
+        });
+    });
+
+    // Close popup on outside click
+    overlay.addEventListener("click", (e)=>{ if(e.target.id==="overlay"){ overlay.style.display="none"; } });
+
+    // Mobile Hamburger
+    const hamburger = document.querySelector(".hamburger");
+    const navLinks = document.querySelector(".nav-links");
+    hamburger.addEventListener("click", () => { navLinks.classList.toggle("active"); });
+  </script>
+
+</body>
+</html>

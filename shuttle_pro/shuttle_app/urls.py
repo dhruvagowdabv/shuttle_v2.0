@@ -14,6 +14,6 @@ urlpatterns = [
     path('signup/', views.signup_view, name='signup'),
     path('logout/', views.logout_view, name='logout'),
 
-    # Dashboard
+    # Optional dashboard
     path('dashboard/', views.auth_dashboard, name='dashboard'),
 ]

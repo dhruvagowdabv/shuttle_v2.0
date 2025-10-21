@@ -18,6 +18,9 @@
       <li><a href="{% url 'booking' %}" >Booking</a></li>
       <li><a href="{% url 'track2' %}">Tracking</a></li>
       <li><a href="{% url 'operator' %}"class="active">Operator</a></li>
+      {% if user.is_superuser %}
+      <li class="nav-item"><a class="nav-link" href="{% url 'admin_page' %}">Admin</a></li>
+      {% endif %}
       {% comment %} <li><a href="{% url 'about' %}">About Us</a></li>   {% endcomment %}
       {% comment %} <li><a href="{% url 'admin' %}">Admin</a></li>  {% endcomment %}
     </ul>

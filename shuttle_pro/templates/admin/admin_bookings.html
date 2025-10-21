@@ -1,0 +1,116 @@
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookings | ShuttlePro Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;font-family:"Poppins",sans-serif;background:#f8fafc;color:#1e293b;}
+    nav{background:#0f172a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:1rem 2rem;}
+    .logo{font-size:1.5rem;font-weight:600;}
+    .nav-links{display:flex;gap:1rem;align-items:center;}
+    .nav-links a{color:white;text-decoration:none;font-weight:500;}
+    .nav-links a:hover{text-decoration:underline;}
+    .logout{background:#ef4444;color:white;border:none;border-radius:8px;padding:0.5rem 1rem;cursor:pointer;}
+    .container{padding:2rem;}
+    h2{color:#0f172a;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:2rem;}
+    .card{background:white;padding:1.5rem;border-radius:12px;box-shadow:0 4px 8px rgba(0,0,0,0.1);}
+    table{width:100%;border-collapse:collapse;margin-top:2rem;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 8px rgba(0,0,0,0.1);}
+    th,td{padding:0.75rem 1rem;text-align:left;border-bottom:1px solid #e2e8f0;}
+    th{background:#0f172a;color:white;}
+    tr:nth-child(even){background:#f1f5f9;}
+    tr:hover{background:#e2e8f0;}
+    .badge{padding:0.3rem 0.7rem;border-radius:6px;font-weight:500;}
+    .approved{background:#22c55e20;color:#16a34a;}
+    .pending{background:#facc1520;color:#ca8a04;}
+    .canceled{background:#ef444420;color:#b91c1c;}
+    .action-btn{border:none;border-radius:6px;padding:0.4rem 0.8rem;cursor:pointer;font-weight:500;}
+    .approve{background:#22c55e;color:white;}
+    .cancel{background:#ef4444;color:white;}
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="logo">ShuttlePro Admin</div>
+    <div class="nav-links">
+      <a href="{% url 'admin_dashboard' %}">Dashboard</a>
+      <a href="{% url 'admin_bookings' %}">Bookings</a>
+      <a href="{% url 'admin_logs' %}">Logs</a>
+      <form method="POST" action="{% url 'logout' %}" style="display:inline;">
+        {% csrf_token %}
+        <button class="logout">Logout</button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2>Bookings Overview 📋</h2>
+
+    <!-- Summary Cards -->
+    <div class="grid">
+      <div class="card">
+        <h3>Total Bookings</h3>
+        <p>{{ total_bookings }}</p>
+      </div>
+      <div class="card">
+        <h3>Approved</h3>
+        <p>{{ approved_count }}</p>
+      </div>
+      <div class="card">
+        <h3>Pending</h3>
+        <p>{{ pending_count }}</p>
+      </div>
+    </div>
+
+    <!-- Bookings Table -->
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User</th>
+          <th>Pickup</th>
+          <th>Drop</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for booking in bookings %}
+        <tr>
+          <td>{{ booking.id }}</td>
+          <td>{{ booking.user.username }}</td>
+          <td>{{ booking.pickup_point }}</td>
+          <td>{{ booking.drop_point }}</td>
+          <td>{{ booking.date }}</td>
+          <td>
+            {% if booking.status == "Approved" %}
+              <span class="badge approved">Approved</span>
+            {% elif booking.status == "Pending" %}
+              <span class="badge pending">Pending</span>
+            {% else %}
+              <span class="badge canceled">Canceled</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="POST" action="{% url 'approve_booking' booking.id %}" style="display:inline;">{% csrf_token %}
+              <button class="action-btn approve">Approve</button>
+            </form>
+            <form method="POST" action="{% url 'cancel_booking' booking.id %}" style="display:inline;">{% csrf_token %}
+              <button class="action-btn cancel">Cancel</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" style="text-align:center;">No bookings found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+{% endblock %}

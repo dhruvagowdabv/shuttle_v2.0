@@ -24,6 +24,9 @@
     <li><a href="{% url 'booking' %}">Booking</a></li>
     <li><a href="{% url 'track2' %}">Tracking</a></li>
     <li><a href="{% url 'operator' %}">Operator</a></li>
+    {% if user.is_authenticated and user.is_superuser %}
+    <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+    {% endif %}
   </ul>
   <div class="hamburger">&#9776;</div>
 </nav>
@@ -43,19 +46,21 @@
           <button id="signupTab" onclick="showSignup()">Sign Up</button>
         </div>
 
+        <div class="error-msg" id="errorMsg"></div>
+
         <div class="form-container" id="loginForm">
           <h2>Welcome Back</h2>
-          <input type="text" placeholder="Username" />
-          <input type="password" placeholder="Password" />
-          <button type="submit">Login</button>
+          <input type="text" placeholder="Username" id="loginUsername"/>
+          <input type="password" placeholder="Password" id="loginPassword"/>
+          <button type="button" id="loginSubmit">Login</button>
         </div>
 
         <div class="form-container" id="signupForm" style="display: none;">
           <h2>Create Account</h2>
-          <input type="text" placeholder="Username" />
-          <input type="email" placeholder="Email" />
-          <input type="password" placeholder="Password" />
-          <button type="submit">Sign Up</button>
+          <input type="text" placeholder="Username" id="signupUsername"/>
+          <input type="email" placeholder="Email" id="signupEmail"/>
+          <input type="password" placeholder="Password" id="signupPassword"/>
+          <button type="button" id="signupSubmit">Sign Up</button>
         </div>
       </div>
     </div>
@@ -67,53 +72,102 @@
 </section>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-
+  document.addEventListener("DOMContentLoaded", () => {
   const overlay = document.getElementById("overlay");
   const loginBtn = document.getElementById("loginBtn");
   const bookBtn = document.getElementById("bookBtn");
+  const loginFormDiv = document.getElementById("loginForm");
+  const signupFormDiv = document.getElementById("signupForm");
+  const errorMsg = document.getElementById("errorMsg");
+
+  function showLogin() {
+    loginFormDiv.style.display = "block";
+    signupFormDiv.style.display = "none";
+    document.getElementById("loginTab").classList.add("active");
+    document.getElementById("signupTab").classList.remove("active");
+    if(errorMsg) errorMsg.style.display="none";
+  }
+
+  function showSignup() {
+    loginFormDiv.style.display = "none";
+    signupFormDiv.style.display = "block";
+    document.getElementById("signupTab").classList.add("active");
+    document.getElementById("loginTab").classList.remove("active");
+    if(errorMsg) errorMsg.style.display="none";
+  }
+
+  if(loginBtn){
+    loginBtn.addEventListener("click", () => { overlay.style.display="flex"; showLogin(); });
+  }
+
+  if(bookBtn){
+    bookBtn.addEventListener("click", e => {
+      {% if not user.is_authenticated %}
+        e.preventDefault();
+        overlay.style.display="flex";
+        showLogin();
+      {% endif %}
+    });
+  }
+
+  overlay.addEventListener("click",(e)=>{ if(e.target.id==="overlay"){ overlay.style.display="none"; } });
+
+  const loginSubmit = document.getElementById("loginSubmit");
+  if(loginSubmit){
+    loginSubmit.addEventListener("click", ()=>{
+      const username=document.getElementById("loginUsername").value;
+      const password=document.getElementById("loginPassword").value;
+      fetch("{% url 'login' %}",{
+        method:"POST",
+        headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body:JSON.stringify({username,password})
+      }).then(res=>res.json()).then(data=>{
+        if(data.success){
+          overlay.style.display="none";
+          location.href="{% url 'booking' %}";
+        } else {
+          errorMsg.innerText=data.message;
+          errorMsg.style.display="block";
+        }
+      });
+    });
+  }
+
+  const signupSubmit = document.getElementById("signupSubmit");
+  if(signupSubmit){
+    signupSubmit.addEventListener("click", ()=>{
+      const username=document.getElementById("signupUsername").value;
+      const email=document.getElementById("signupEmail").value;
+      const password=document.getElementById("signupPassword").value;
+      fetch("{% url 'signup' %}",{
+        method:"POST",
+        headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+        body:JSON.stringify({username,email,password})
+      }).then(res=>res.json()).then(data=>{
+        if(data.success){
+          overlay.style.display="none";
+          location.href="{% url 'booking' %}";
+        } else {
+          errorMsg.innerText=data.message;
+          errorMsg.style.display="block";
+        }
+      });
+    });
+  }
 
   {% if user.is_authenticated %}
-    // Logged-in: show logout button
     const btn = document.createElement("button");
     btn.className = "popup-btn";
     btn.innerText = "Logout";
     btn.onclick = () => { window.location.href="{% url 'logout' %}"; };
-    document.getElementById("content").prepend(btn);
-    overlay.style.display = "none";
-  {% else %}
-    loginBtn.addEventListener("click", () => { overlay.style.display = "flex"; });
-
-    // Guest: intercept "Book Your Ride"
-    bookBtn.addEventListener("click", e => {
-      e.preventDefault();
-      overlay.style.display = "flex";
-    });
+    if(document.getElementById("content")){
+      document.getElementById("content").prepend(btn);
+    }
   {% endif %}
 
-  function showLogin() {
-    document.getElementById("loginForm").style.display = "block";
-    document.getElementById("signupForm").style.display = "none";
-    document.getElementById("loginTab").classList.add("active");
-    document.getElementById("signupTab").classList.remove("active");
-  }
-  function showSignup() {
-    document.getElementById("loginForm").style.display = "none";
-    document.getElementById("signupForm").style.display = "block";
-    document.getElementById("signupTab").classList.add("active");
-    document.getElementById("loginTab").classList.remove("active");
-  }
-
-  // Close popup on outside click
-  overlay.addEventListener("click", (e)=>{ if(e.target.id==="overlay"){ overlay.style.display="none"; } });
-
-  // Mobile Hamburger
-  const hamburger = document.querySelector(".hamburger");
-  const navLinks = document.querySelector(".nav-links");
-  hamburger.addEventListener("click", () => { navLinks.classList.toggle("active"); });
-
+  window.showLogin=showLogin;
+  window.showSignup=showSignup;
 });
-</script>
-
+  </script>
 </body>
 </html>

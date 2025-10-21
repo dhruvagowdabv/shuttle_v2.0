@@ -19,6 +19,8 @@
 <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
 
 <style>
+
+
 .booking-container {
   display: grid;
   grid-template-columns: 1fr 1.5fr;
@@ -165,6 +167,9 @@
 <li><a href="{% url 'booking' %}" class="active">Booking</a></li>
 <li><a href="{% url 'track2' %}">Tracking</a></li>
 <li><a href="{% url 'operator' %}">Operator</a></li>
+  {% if user.is_authenticated and user.is_superuser %}
+  <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+  {% endif %}
 </ul>
 </nav>
 
@@ -179,8 +184,8 @@
 <div class="booking-form">
 <h2>Reserve Your Ride</h2>
 <form id="bookingForm">
-<label>Passenger Name</label>
-<input type="text" id="username" placeholder="Enter your name" required>
+{% comment %} <label id="pass">Passenger Name</label> {% endcomment %}
+<input type="text" id="username" placeholder="Enter your name" value="{{ request.user.username }}" {% if request.user.is_authenticated %}readonly{% endif %} required>
 
 <label>Zone</label>
 <select id="zoneSelect" required>
@@ -246,39 +251,36 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+
+  // ---- Login/Signup Overlay ----
   const overlay = document.getElementById("overlay");
   const loginFormDiv = document.getElementById("loginForm");
   const signupFormDiv = document.getElementById("signupForm");
   const errorMsg = document.getElementById("errorMsg");
 
-  function showLogin() {
-    loginFormDiv.style.display = "block";
-    signupFormDiv.style.display = "none";
+  function showLogin(){
+    loginFormDiv.style.display="block";
+    signupFormDiv.style.display="none";
     document.getElementById("loginTab").classList.add("active");
     document.getElementById("signupTab").classList.remove("active");
     errorMsg.style.display="none";
   }
-
-  function showSignup() {
-    loginFormDiv.style.display = "none";
-    signupFormDiv.style.display = "block";
+  function showSignup(){
+    loginFormDiv.style.display="none";
+    signupFormDiv.style.display="block";
     document.getElementById("signupTab").classList.add("active");
     document.getElementById("loginTab").classList.remove("active");
     errorMsg.style.display="none";
   }
 
-  // Show popup
-  function showOverlay(msg="") {
+  function showOverlay(msg=""){
     overlay.style.display="flex";
-    if(msg) {
-      errorMsg.innerText=msg;
-      errorMsg.style.display="block";
-    }
+    if(msg){ errorMsg.innerText=msg; errorMsg.style.display="block"; }
   }
 
   overlay.addEventListener("click",(e)=>{ if(e.target.id==="overlay"){ overlay.style.display="none"; } });
 
-  // Booking map setup
+  // ---- Map + Zone Logic ----
   const pilotAreas = {
     hebbal: {center:[13.0358,77.5970], color:'#f9a825', stops:[
       {name:"Hebbal Flyover", lat:13.037, lng:77.596},
@@ -378,31 +380,49 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Book Now click
-  document.getElementById("bookingForm").addEventListener("submit",e=>{
+  // ---- Booking form with backend ----
+  document.getElementById("bookingForm").addEventListener("submit", e=>{
     e.preventDefault();
-    // Check if user is logged in
     const isAuthenticated = {{ request.user.is_authenticated|yesno:"true,false" }};
     if(!isAuthenticated){
       showOverlay("You are in guest mode. Please login/signup to book a ticket.");
       return;
     }
 
-    ticket.innerHTML=`
-      <h3>🎫 Shuttle Ticket</h3>
-      <p><strong>Name:</strong> ${document.getElementById("username").value}</p>
-      <p><strong>Zone:</strong> ${selectedZone.toUpperCase()}</p>
-      <p><strong>From:</strong> ${pickupSelect.options[pickupSelect.value]?.text || ""}</p>
-      <p><strong>To:</strong> ${dropSelect.options[dropSelect.value]?.text || ""}</p>
-      <p><strong>Seats:</strong> ${document.getElementById("seats").value}</p>
-      <p><strong>Payment:</strong> ${document.getElementById("payment").value}</p>
-      <p style="color:#00ff88;"><strong>Status:</strong> Confirmed ✅</p>
-    `;
-    ticket.style.display="block";
-    ticket.scrollIntoView({behavior:"smooth"});
+    const data = {
+      passenger_name: document.getElementById("username").value,
+      zone: selectedZone,
+      pickup_location: pickupSelect.options[pickupSelect.value]?.text || "",
+      drop_location: dropSelect.options[dropSelect.value]?.text || "",
+      seats: document.getElementById("seats").value,
+      payment_method: document.getElementById("payment").value
+    };
+
+    fetch("{% url 'create_booking' %}", {
+      method:"POST",
+      headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+      body: JSON.stringify(data)
+    }).then(res=>res.json()).then(resp=>{
+      if(resp.success){
+        ticket.innerHTML = `
+          <h3>🎫 Shuttle Ticket</h3>
+          <p><strong>Name:</strong> ${data.passenger_name}</p>
+          <p><strong>Zone:</strong> ${data.zone.toUpperCase()}</p>
+          <p><strong>From:</strong> ${data.pickup_location}</p>
+          <p><strong>To:</strong> ${data.drop_location}</p>
+          <p><strong>Seats:</strong> ${data.seats}</p>
+          <p><strong>Payment:</strong> ${data.payment_method}</p>
+          <p style="color:#00ff88;"><strong>Status:</strong> Confirmed ✅</p>
+        `;
+        ticket.style.display="block";
+        ticket.scrollIntoView({behavior:"smooth"});
+      } else {
+        alert(resp.message);
+      }
+    });
   });
 
-  // AJAX Login
+  // ---- AJAX Login ----
   document.getElementById("loginSubmit").addEventListener("click",()=>{
     const username=document.getElementById("loginUsername").value;
     const password=document.getElementById("loginPassword").value;
@@ -417,7 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // AJAX Signup
+  // ---- AJAX Signup ----
   document.getElementById("signupSubmit").addEventListener("click",()=>{
     const username=document.getElementById("signupUsername").value;
     const email=document.getElementById("signupEmail").value;
@@ -433,7 +453,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Expose tab functions globally
   window.showLogin=showLogin;
   window.showSignup=showSignup;
 });

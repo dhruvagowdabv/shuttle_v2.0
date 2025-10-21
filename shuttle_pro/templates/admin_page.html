@@ -1,0 +1,91 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Analytics</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-dark text-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">Smart Shuttle Admin</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">Auth Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'logout' %}">Logout</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-5">
+    <h1 class="text-success">Admin Analytics</h1>
+
+    <!-- Event Pie Chart -->
+    <div class="mt-4">
+        <canvas id="eventPieChart" height="200"></canvas>
+    </div>
+
+    <!-- Latest Auth Logs -->
+    <div class="mt-5">
+        <h3>Latest Authentication Logs</h3>
+        <table class="table table-dark table-striped mt-3">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Username</th>
+                    <th>Event</th>
+                    <th>IP Address</th>
+                    <th>User Agent</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.username }}</td>
+                    <td>{{ log.event }}</td>
+                    <td>{{ log.ip_address }}</td>
+                    <td>{{ log.user_agent }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">No logs yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const ctx = document.getElementById('eventPieChart').getContext('2d');
+    const data = {
+        labels: [
+            {% for item in event_counts %}
+                "{{ item.event }}",
+            {% endfor %}
+        ],
+        datasets: [{
+            label: 'Auth Events',
+            data: [
+                {% for item in event_counts %}
+                    {{ item.count }},
+                {% endfor %}
+            ],
+            backgroundColor: [
+                'rgba(54, 162, 235, 0.6)', // login
+                'rgba(75, 192, 192, 0.6)', // signup
+                'rgba(255, 99, 132, 0.6)', // logout
+                'rgba(255, 206, 86, 0.6)'  // failed_login
+            ],
+            borderWidth: 1
+        }]
+    };
+    const eventPieChart = new Chart(ctx, { type: 'pie', data: data });
+</script>
+
+</body>
+</html>

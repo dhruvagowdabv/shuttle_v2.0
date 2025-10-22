@@ -7,13 +7,15 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.contrib.auth.decorators import user_passes_test
 import json
 
 from django.db.models import Sum
 from django.utils import timezone
 from datetime import timedelta
+
+from django.shortcuts import render, get_object_or_404
 
 
 
@@ -219,18 +221,24 @@ def admin_logs(request):
 # Admin Booking Management
 # ---------------------------
 
-from django.shortcuts import get_object_or_404
+# shuttle_app/views.py
+
+
+from django.shortcuts import render, get_object_or_404
+from django.utils import timezone
+from django.db.models import Count, Sum
+from django.contrib.auth.decorators import user_passes_test
+from datetime import timedelta
+from .models import Booking
 
 @user_passes_test(lambda u: u.is_staff)
 def admin_bookings(request):
-    from .models import Booking
+    bookings = Booking.objects.all().order_by('-created_at')
 
-    # Filters
+    # --- Filters ---
     zone_filter = request.GET.get('zone', '')
     status_filter = request.GET.get('status', '')
-    date_filter = request.GET.get('date', '')  # e.g., 'today', 'week', 'month'
-
-    bookings = Booking.objects.all().order_by('-created_at')
+    date_filter = request.GET.get('date', '')
 
     if zone_filter:
         bookings = bookings.filter(zone=zone_filter)
@@ -241,43 +249,54 @@ def admin_bookings(request):
         if date_filter == 'today':
             bookings = bookings.filter(created_at__date=now.date())
         elif date_filter == 'week':
-            week_ago = now - timedelta(days=7)
-            bookings = bookings.filter(created_at__gte=week_ago)
+            bookings = bookings.filter(created_at__gte=now - timedelta(days=7))
         elif date_filter == 'month':
-            month_ago = now - timedelta(days=30)
-            bookings = bookings.filter(created_at__gte=month_ago)
+            bookings = bookings.filter(created_at__gte=now - timedelta(days=30))
 
-    # ---- Analytics (for summary cards) ----
+    # --- Analytics ---
     total_bookings = bookings.count()
     approved_count = bookings.filter(status='Approved').count()
     pending_count = bookings.filter(status='Pending').count()
     cancelled_count = bookings.filter(status='Canceled').count()
-
-    # ---- Additional stats ----
     total_seats = bookings.aggregate(total_seats=Sum('seats'))['total_seats'] or 0
 
-    # ---- Charts ----
+    # --- Charts ---
     zone_counts = bookings.values('zone').annotate(count=Count('id'))
     zone_chart = {z['zone']: z['count'] for z in zone_counts}
 
     payment_counts = bookings.values('payment_method').annotate(count=Count('id'))
     payment_chart = {p['payment_method']: p['count'] for p in payment_counts}
 
+    # --- Recent Bookings ---
+    recent_bookings = bookings[:10]
+
+    # --- Distinct Zones ---
+    zones = Booking.objects.values_list('zone', flat=True).distinct()
+
     context = {
         'bookings': bookings,
+        'zones': zones,
+        'zone_filter': zone_filter,
+        'status_filter': status_filter,
+        'date_filter': date_filter,
         'total_bookings': total_bookings,
         'approved_count': approved_count,
         'pending_count': pending_count,
         'cancelled_count': cancelled_count,
         'total_seats': total_seats,
-        'zone_chart': zone_chart,
-        'payment_chart': payment_chart,
-        'zone_filter': zone_filter,
-        'status_filter': status_filter,
-        'date_filter': date_filter,
+        'zone_chart_labels': list(zone_chart.keys()),
+        'zone_chart_values': list(zone_chart.values()),
+        'payment_chart_labels': list(payment_chart.keys()),
+        'payment_chart_values': list(payment_chart.values()),
+        'recent_bookings': recent_bookings,
     }
 
     return render(request, 'admin/admin_bookings.html', context)
+
+
+
+
+
 
 
 # ---------------------------
@@ -300,18 +319,43 @@ def cancel_booking(request, booking_id):
     return redirect('admin_bookings')
 
 
+
 @csrf_exempt
 @user_passes_test(lambda u: u.is_staff)
 def update_booking_status(request, booking_id):
-    from .models import Booking
     if request.method == "POST":
+        import json
         try:
             data = json.loads(request.body)
             status = data.get("status")
-            booking = Booking.objects.get(id=booking_id)
+            booking = get_object_or_404(Booking, id=booking_id)
             booking.status = status
             booking.save()
-            return JsonResponse({"success": True, "status": status})
+
+            # Updated counts, charts & recent bookings
+            bookings = Booking.objects.all()
+            counts = {
+                "approved": bookings.filter(status="Approved").count(),
+                "pending": bookings.filter(status="Pending").count(),
+                "canceled": bookings.filter(status="Canceled").count(),
+                "total": bookings.count(),
+                "total_seats": bookings.aggregate(total_seats=Sum('seats'))['total_seats'] or 0
+            }
+
+            zone_counts = bookings.values('zone').annotate(count=Count('id'))
+            zone_chart = {"labels":[z['zone'] for z in zone_counts], "values":[z['count'] for z in zone_counts]}
+
+            payment_counts = bookings.values('payment_method').annotate(count=Count('id'))
+            payment_chart = {"labels":[p['payment_method'] for p in payment_counts], "values":[p['count'] for p in payment_counts]}
+
+            recent_bookings = list(bookings.order_by('-created_at')[:10].values(
+                'id', 'passenger_name', 'zone', 'pickup_location', 'drop_location', 
+                'seats', 'payment_method', 'status', 'created_at'
+            ))
+            for b in recent_bookings:
+                b['created_at'] = b['created_at'].strftime("%b %d, %Y %H:%M")
+
+            return JsonResponse({"success": True, "counts": counts, "zone_chart": zone_chart, "payment_chart": payment_chart, "recent_bookings": recent_bookings})
         except Exception as e:
             return JsonResponse({"success": False, "message": str(e)})
     return JsonResponse({"success": False, "message": "Invalid request"})
@@ -341,4 +385,129 @@ def create_booking(request):
     return JsonResponse({"success": False, "message": "Invalid request"})
 
 
-# for admindashboard table
+@csrf_exempt
+# shuttle_app/views.py
+
+# ---------------------------
+# Admin Booking Management
+# ---------------------------
+@user_passes_test(lambda u: u.is_staff)
+def admin_bookings(request):
+    bookings = Booking.objects.all().order_by('-created_at')
+
+    # Filters
+    zone_filter = request.GET.get('zone', '')
+    status_filter = request.GET.get('status', '')
+    date_filter = request.GET.get('date', '')
+
+    if zone_filter:
+        bookings = bookings.filter(zone=zone_filter)
+    if status_filter:
+        bookings = bookings.filter(status=status_filter)
+    if date_filter:
+        now = timezone.now()
+        if date_filter == 'today':
+            bookings = bookings.filter(created_at__date=now.date())
+        elif date_filter == 'week':
+            bookings = bookings.filter(created_at__gte=now - timedelta(days=7))
+        elif date_filter == 'month':
+            bookings = bookings.filter(created_at__gte=now - timedelta(days=30))
+
+    # Analytics
+    total_bookings = bookings.count()
+    approved_count = bookings.filter(status='Approved').count()
+    pending_count = bookings.filter(status='Pending').count()
+    cancelled_count = bookings.filter(status='Canceled').count()
+    total_seats = bookings.aggregate(total_seats=Sum('seats'))['total_seats'] or 0
+
+    # Charts
+    zone_counts = bookings.values('zone').annotate(count=Count('id'))
+    zone_chart = {z['zone']: z['count'] for z in zone_counts}
+
+    payment_counts = bookings.values('payment_method').annotate(count=Count('id'))
+    payment_chart = {p['payment_method']: p['count'] for p in payment_counts}
+
+    # Recent bookings
+    recent_bookings = bookings[:10]
+
+    # Zones for filter dropdown
+    zones = Booking.objects.values_list('zone', flat=True).distinct()
+
+    context = {
+        'zones': zones,
+        'zone_filter': zone_filter,
+        'status_filter': status_filter,
+        'date_filter': date_filter,
+        'total_bookings': total_bookings,
+        'approved_count': approved_count,
+        'pending_count': pending_count,
+        'cancelled_count': cancelled_count,
+        'total_seats': total_seats,
+        'zone_chart_labels': list(zone_chart.keys()),
+        'zone_chart_values': list(zone_chart.values()),
+        'payment_chart_labels': list(payment_chart.keys()),
+        'payment_chart_values': list(payment_chart.values()),
+        'recent_bookings': recent_bookings,
+    }
+    return render(request, 'admin/admin_bookings.html', context)
+
+# ---------------------------
+# Fetch Latest Bookings (AJAX)
+# ---------------------------
+@user_passes_test(lambda u: u.is_staff)
+def fetch_latest_bookings(request):
+    bookings = Booking.objects.order_by('-created_at')[:10]
+    data = []
+    for b in bookings:
+        data.append({
+            "id": b.id,
+            "passenger_name": b.passenger_name,
+            "zone": b.zone,
+            "pickup": b.pickup_location,
+            "drop": b.drop_location,
+            "seats": b.seats,
+            "payment": b.payment_method,
+            "status": b.status,
+            "created": b.created_at.strftime("%b %d, %Y %H:%M")
+        })
+
+    # Also return counts and chart data
+    all_bookings = Booking.objects.all()
+    counts = {
+        "total": all_bookings.count(),
+        "approved": all_bookings.filter(status="Confirmed").count(),
+        "pending": all_bookings.filter(status="Pending").count(),
+        "canceled": all_bookings.filter(status="Canceled").count(),
+    }
+
+    zone_counts = all_bookings.values('zone').annotate(count=Count('id'))
+    zone_chart = {
+        "labels": [z['zone'] for z in zone_counts],
+        "values": [z['count'] for z in zone_counts]
+    }
+
+    payment_counts = all_bookings.values('payment_method').annotate(count=Count('id'))
+    payment_chart = {
+        "labels": [p['payment_method'] for p in payment_counts],
+        "values": [p['count'] for p in payment_counts]
+    }
+
+    return JsonResponse({
+        "bookings": data,
+        "counts": counts,
+        "zone_chart": zone_chart,
+        "payment_chart": payment_chart
+    })
+
+
+# ---------------------------
+# Cancel Booking (AJAX)
+# ---------------------------
+@user_passes_test(lambda u: u.is_staff)
+def cancel_booking(request, booking_id):
+    if request.method == "POST":
+        booking = get_object_or_404(Booking, id=booking_id)
+        booking.status = "Canceled"
+        booking.save()
+        return JsonResponse({"success": True})
+    return JsonResponse({"success": False, "message": "Invalid request"})

@@ -38,7 +38,13 @@ urlpatterns = [
     path('admin-panel/bookings/<int:booking_id>/approve/', views.approve_booking, name='approve_booking'),
     path('admin-panel/bookings/<int:booking_id>/cancel/', views.cancel_booking, name='cancel_booking'),
 
+    path('admin-panel/bookings/update-status/<int:booking_id>/', views.update_booking_status, name='update_booking_status'),
 
+    path('fetch-latest-bookings/', views.fetch_latest_bookings, name='fetch_latest_bookings'),
+
+    # path('admin-panel/bookings/', views.admin_bookings, name='admin_bookings'),
+    path('admin-panel/bookings/fetch_latest/', views.fetch_latest_bookings, name='fetch_latest_bookings'),
+    path('admin-panel/bookings/cancel/<int:booking_id>/', views.cancel_booking, name='cancel_booking'),
 
 
 ]

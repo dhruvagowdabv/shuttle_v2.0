@@ -1,333 +1,236 @@
 {% load static %}
 
-
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>UrbanXpress — Tracking</title>
+  <title>UrbanXpress — Live Shuttle Tracking</title>
 
-  <!-- your global CSS (keeps same look as index/booking) -->
-  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
 
   <style>
-    /* Page-specific CSS */
-    .small-hero { background: linear-gradient(180deg,#070707,#0f1112); color: #fff; padding: 50px 20px 30px; text-align:center; }
-    .small-hero h1 { margin: 0 0 6px; font-size: 2rem; color: #00ff88; text-shadow: 0 0 12px rgba(0,255,136,0.12); }
-    .tracking-container { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; padding: 28px; max-width:1200px; margin: 0 auto 60px; }
-    .map-section, .card-section { background: #0c0d0e; border-radius: 12px; padding: 16px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+    body { margin: 0; font-family: sans-serif; background: #0c0d0e; color: #eee; }
+    .navbar { display: flex; justify-content: space-between; padding: 12px 24px; background: #111; }
+    .navbar .logo { color: #00ff88; font-weight: bold; font-size: 1.2rem; }
+    .navbar ul { display: flex; gap: 18px; list-style: none; margin: 0; padding: 0; }
+    .navbar ul li a { color: #ddd; text-decoration: none; }
+    .navbar ul li a.active { color: #00ff88; font-weight: bold; }
+    .small-hero { background: linear-gradient(180deg, #070707, #0f1112); color: #fff; padding: 50px 20px 30px; text-align: center; }
+    .small-hero h1 { color: #00ff88; margin: 0 0 6px; font-size: 2rem; text-shadow: 0 0 12px rgba(0, 255, 136, 0.12); }
+    .tracking-container { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; padding: 28px; max-width: 1200px; margin: 0 auto 60px; }
+    .map-section, .card-section { background: #0c0d0e; border-radius: 12px; padding: 16px; box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6); }
     #map { height: 66vh; min-height: 360px; border-radius: 10px; }
-    .cards { display:flex; flex-direction:column; gap:14px; margin-top:12px; }
-    .shuttle-card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:12px 14px; border-radius:10px; box-shadow: 0 6px 18px rgba(0,255,136,0.04); transition: transform .18s; }
-    .shuttle-card:hover{ transform: translateY(-6px); }
-    .shuttle-card h3{ color:#00ff88; margin-bottom:6px; }
-    .shuttle-card p{ color:#cbd5c7; font-size:0.95rem; margin:4px 0; }
-    .controls { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-    .controls select, .controls button { padding:8px 10px; border-radius:8px; border:none; background:#111; color:#ddd; box-shadow: 0 3px 10px rgba(0,0,0,0.4); }
-    .legend { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; color:#ddd; font-size:0.9rem; }
-    .legend .dot { width:14px; height:14px; border-radius:50%; display:inline-block; margin-right:6px; border:1px solid rgba(0,0,0,0.25); }
-    @media (max-width: 980px) {
-      .tracking-container { grid-template-columns: 1fr; padding: 18px; }
-      #map { height: 50vh; min-height: 320px; }
-    }
+    .cards { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+    .zone-card { background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)); padding: 12px 14px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 255, 136, 0.04); }
+    .zone-card h3 { color: #00ff88; margin-bottom: 8px; }
+    .shuttle-info { background: #111; border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; font-size: 0.9rem; }
+    .shuttle-info strong { color: #00ff88; }
+    .shuttle-status-full { color: #ff6b6b; font-weight: bold; }
+    .progress-container { background: #222; height: 6px; border-radius: 4px; margin-top: 4px; }
+    .progress-bar { height: 6px; background: #00ff88; border-radius: 4px; width: 0%; transition: width 0.3s; }
+    .legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; color: #ddd; font-size: 0.9rem; }
+    .legend .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 6px; border: 1px solid rgba(0, 0, 0, 0.25); }
+    @media (max-width: 980px) { .tracking-container { grid-template-columns: 1fr; } #map { height: 50vh; } }
+    .stop-tooltip { background: #000; color: #fff; font-size: 0.8rem; padding: 2px 4px; border-radius: 4px; }
+    .focus-btn { margin-bottom:6px; padding:4px 8px; background:#00ff88; color:#000; border:none; border-radius:4px; cursor:pointer; }
   </style>
 </head>
+
 <body>
 
-  <!-- same nav as your index (keeping consistent) -->
   <nav class="navbar">
     <div class="logo">Urban<span>Xpress</span></div>
-    <ul class="nav-links">
-       <li><a href="{% url 'home' %}">Home</a></li>
-      <li><a href="{% url 'booking' %}" >Booking</a></li>
+<ul class="nav-links">
+<li><a href="{% url 'home' %}">Home</a></li>
+<li><a href="{% url 'booking' %}" >Booking</a></li>
+<li><a href="{% url 'track2' %}" class="active">Tracking</a></li>
+<li><a href="{% url 'operator' %}" >Operator</a></li>
+  {% if user.is_authenticated and user.is_superuser %}
+  <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+  {% endif %}
 
-      <li><a href="{% url 'track2' %}" class="active">Tracking</a></li>
-      <li><a href="{% url 'operator' %}">Operator</a></li>
-      {% comment %} <li><a href="{% url 'about' %}">About Us</a></li>   {% endcomment %}
-      {% comment %} <li><a href="{% url 'admin' %}">Admin</a></li>   {% endcomment %}
-    </ul>
+
   </nav>
 
   <section class="small-hero">
     <h1>Live Shuttle Tracking</h1>
-    <div style="color:#bfcfc1; margin-top:6px;">
-      Monitor shuttles in pilot areas. Click an area to zoom — each shuttle moves naturally along a route and the cards show live status.
-    </div>
+    <p style="color:#bfcfc1;">Shuttles move along actual road paths. Cards show shuttle info, progress, ETA, and next stops.</p>
   </section>
 
   <div class="tracking-container">
-
-    <!-- MAP -->
     <div class="map-section">
-      <div class="controls" aria-hidden="false">
-        <label for="areaSelect" style="color:#cfead1;">Jump to area:</label>
-        <select id="areaSelect" aria-label="Jump to pilot area">
-          <option value="">— select area —</option>
-          <option value="hebbal">Hebbal</option>
-          <option value="whitefield">Whitefield</option>
-          <option value="malleshwaram">Malleshwaram</option>
-          <option value="tinfactory">Tin Factory</option>
-        </select>
-
-        <button id="focusNext">Focus Next Shuttle</button>
-        <div class="legend" style="margin-left:auto;">
-          <span><span class="dot" style="background:#f9a825"></span> Hebbal</span>
-          <span><span class="dot" style="background:#4fc3f7"></span> Whitefield</span>
-          <span><span class="dot" style="background:#81c784"></span> Malleshwaram</span>
-          <span><span class="dot" style="background:#ce93d8"></span> Tin Factory</span>
-        </div>
+      <div class="legend" style="margin-bottom:12px;">
+        <span><span class="dot" style="background:#f9a825"></span> Hebbal</span>
+        <span><span class="dot" style="background:#4fc3f7"></span> Whitefield</span>
+        <span><span class="dot" style="background:#81c784"></span> Malleshwaram</span>
+        <span><span class="dot" style="background:#ce93d8"></span> Tin Factory</span>
       </div>
-
-      <div id="map" role="region" aria-label="Live shuttle map"></div>
+      <div id="map"></div>
     </div>
 
-    <!-- CARDS -->
-    <aside class="card-section" aria-live="polite">
-      <h2 style="color:#fff; margin:0 0 8px;">Active Shuttles</h2>
-      <div id="cards" class="cards">
-        <!-- cards injected by JS -->
-      </div>
+    <aside class="card-section">
+      <h2 style="color:#fff; margin:0 0 8px;">Active Shuttles by Zone</h2>
+      <div id="cards" class="cards"></div>
     </aside>
   </div>
-occupancy
+
   <script>
-  // -------------------------
-  // Tracking page JS
-  // -------------------------
-  // pilot area definitions (center coords + display color)
-  const pilotAreas = {
-    hebbal:      { center: [13.0358, 77.5970], color: '#f9a825' }, // amber
-    whitefield:  { center: [12.9698, 77.7500], color: '#4fc3f7' }, // blue
-    malleshwaram:{ center: [13.0033, 77.5690], color: '#81c784' }, // green
-    tinfactory:  { center: [12.9881, 77.6406], color: '#ce93d8' }  // purple
-  };
-
-  // smooth bearing calculation (degrees)
-  function toRad(d){ return d * Math.PI/180; }
-  function toDeg(r){ return r * 180/Math.PI; }
-  function bearing(from, to){
-    const lat1 = toRad(from.lat), lat2 = toRad(to.lat);
-    const dLon = toRad(to.lng - from.lng);
-    const y = Math.sin(dLon) * Math.cos(lat2);
-    const x = Math.cos(lat1)*Math.sin(lat2) - Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
-    return (toDeg(Math.atan2(y, x)) + 360) % 360;
-  }
-
-  // create map
-  const map = L.map('map', { zoomControl: true }).setView(pilotAreas.hebbal.center, 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-  // draw pilot-area colored circles
-  const areaLayers = {};
-  Object.entries(pilotAreas).forEach(([key, a])=>{
-    const circle = L.circle(a.center, { radius: 5000, color: a.color, weight: 3, fillColor: a.color, fillOpacity: 0.12 }).addTo(map);
-    circle.bindPopup(`<strong>${key[0].toUpperCase()+key.slice(1)}</strong> — pilot area (5 km)`);
-    circle.on('click', ()=> map.fitBounds(circle.getBounds(), {padding:[60,60]}));
-    areaLayers[key] = circle;
-  });
-
-  // routes (small loops inside each pilot area)
-  const routes = {
-    hebbal: [
-      [13.0368,77.5978], [13.0385,77.6002], [13.0412,77.6021], [13.0440,77.5989],
-      [13.0420,77.5955], [13.0380,77.5935], [13.0368,77.5978]
-    ],
-    whitefield: [
-      [12.9712,77.7523],[12.9737,77.7500],[12.9759,77.7470],[12.9730,77.7450],
-      [12.9708,77.7478],[12.9712,77.7523]
-    ],
-    malleshwaram: [
-      [13.0060,77.5710],[13.0050,77.5680],[13.0020,77.5670],[12.9995,77.5698],
-      [13.0015,77.5720],[13.0060,77.5710]
-    ],
-    tinfactory: [
-      [12.9900,77.6420],[12.9925,77.6390],[12.9896,77.6370],[12.9870,77.6392],
-      [12.9860,77.6415],[12.9900,77.6420]
-    ]
-  };
-
-  // helper: make a DivIcon containing an <img> so inner rotation is stable
-  function createCarIcon(colorHex){
-    const svg = encodeURIComponent(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24">
-        <g transform="translate(0,0)">
-          <rect x="1" y="7" width="22" height="10" rx="2" ry="2" fill="${colorHex}" opacity="0.95"/>
-          <circle cx="7" cy="18.5" r="1.8" fill="#111"/>
-          <circle cx="17" cy="18.5" r="1.8" fill="#111"/>
-          <path d="M3 10 a1 1 0 0 0 0 2 h18 a1 1 0 0 0 0 -2z" fill="#ffffff" opacity="0.08"/>
-        </g>
-      </svg>`);
-    const dataUrl = `data:image/svg+xml;charset=utf-8,${svg}`;
-    return L.divIcon({
-      className: 'car-divicon',
-      html: `<img class="car-image" src="${dataUrl}" style="width:44px;height:44px;display:block;"/>`,
-      iconSize: [44,44],
-      iconAnchor: [22,22]
-    });
-  }
-
-  // create shuttles for each area
-  const shuttles = [];
-  const shuttleSettings = [
-    { id:'A', area:'hebbal', speedKmph:28, capacity:12, color:pilotAreas.hebbal.color },
-    { id:'B', area:'whitefield', speedKmph:30, capacity:10, color:pilotAreas.whitefield.color },
-    { id:'C', area:'malleshwaram', speedKmph:22, capacity:8, color:pilotAreas.malleshwaram.color },
-    { id:'D', area:'tinfactory', speedKmph:24, capacity:14, color:pilotAreas.tinfactory.color }
-  ];
-
-  shuttleSettings.forEach((s,i)=>{
-    const r = routes[s.area];
-    const icon = createCarIcon(s.color);
-    const marker = L.marker(r[0], { icon }).addTo(map);
-    const shuttle = {
-      id: s.id,
-      area: s.area,
-      marker,
-      route: r,
-      index: 0,
-      speedKmph: s.speedKmph,
-      capacity: s.capacity,
-      occupants: Math.floor(Math.random()*(s.capacity+1)),
-      status: 'On Route'
+    const pilotAreas = {
+      hebbal: { color: '#f9a825', center: [13.0368, 77.5978], stops: [[13.0368, 77.5978], [13.0405, 77.6018], [13.0380, 77.5935]] },
+      whitefield: { color: '#4fc3f7', center: [12.9712, 77.7523], stops: [[12.9712, 77.7523], [12.9759, 77.7470], [12.9708, 77.7478]] },
+      malleshwaram: { color: '#81c784', center: [13.0032, 77.5700], stops: [[13.0060, 77.5710], [13.0020, 77.5670], [13.0015, 77.5720]] },
+      tinfactory: { color: '#ce93d8', center: [12.9877, 77.6409], stops: [[12.9900, 77.6420], [12.9870, 77.6392], [12.9860, 77.6415]] }
     };
-    shuttles.push(shuttle);
-  });
 
-  // draw the routes lightly on map
-  Object.entries(routes).forEach(([k, r])=>{
-    L.polyline(r, { color: pilotAreas[k].color, opacity: 0.25, weight: 6, dashArray: '8,8' }).addTo(map);
-  });
+    const stopNames = {
+      hebbal: ['Hebbal Bus Stop', 'Hebbal Flyover', 'Hebbal Junction'],
+      whitefield: ['Whitefield Main', 'Whitefield Bus Stand', 'Whitefield Park'],
+      malleshwaram: ['Malleshwaram Circle', 'Malleshwaram Cross', 'Malleshwaram Temple'],
+      tinfactory: ['Tin Factory Signal', 'Tin Factory Bus Stop', 'Tin Factory Park']
+    };
 
-  // Utility: compute distance in meters (using Leaflet)
-  function distanceMeters(aLatLng, bLatLng){
-    return map.distance(aLatLng, bLatLng);
-  }
+    const map = L.map('map', { zoomControl: false }).setView([12.9716, 77.5946], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-  // animate a single shuttle smoothly along its route (requestAnimationFrame)
-  function animateShuttle(shuttle){
-    const route = shuttle.route;
-    let segIdx = shuttle.index;
-    let from = L.latLng(route[segIdx]);
-    let to = L.latLng(route[(segIdx+1) % route.length]);
-    let segDist = distanceMeters(from, to); // meters
-    const speed = Math.max(5, shuttle.speedKmph); // km/h
-    let segDuration = (segDist / (speed * 1000 / 3600)) * 1000; // ms
+    function createCarIcon(color) {
+      const svg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect x="2" y="7" width="20" height="10" rx="2" ry="2" fill="${color}" opacity="0.9"/><circle cx="7" cy="18.5" r="1.8" fill="#111"/><circle cx="17" cy="18.5" r="1.8" fill="#111"/></svg>`);
+      return L.divIcon({ className: 'car-divicon', html: `<img src="data:image/svg+xml;charset=utf-8,${svg}" style="width:40px;height:40px;"/>`, iconSize: [40, 40], iconAnchor: [20, 20] });
+    }
 
-    let startTime = null;
+    const shuttles = [];
 
-    function step(timestamp){
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const t = Math.min(elapsed / segDuration, 1);
-      // interpolate
-      const lat = from.lat + (to.lat - from.lat) * t;
-      const lng = from.lng + (to.lng - from.lng) * t;
-      shuttle.marker.setLatLng([lat, lng]);
+    // Draw 5km radius circle for each zone and save reference
+    for (let key in pilotAreas) {
+      const area = pilotAreas[key];
+      const circle = L.circle(area.center, { radius: 5000, color: area.color, fillOpacity: 0.05 }).addTo(map);
+      area.circle = circle;
+    }
 
-      // rotate inner image to heading
-      const angle = bearing(from, to);
-      const img = shuttle.marker.getElement() && shuttle.marker.getElement().querySelector('img.car-image');
-      if(img) img.style.transform = `rotate(${angle}deg)`;
+    // Initialize shuttles and stops
+    for (let key in pilotAreas) {
+      const area = pilotAreas[key];
+      area.stops.forEach((stop, idx) => {
+        L.marker(stop).addTo(map).bindTooltip(stopNames[key][idx], { permanent: true, direction: 'top', className: 'stop-tooltip' });
+      });
 
-      // update shuttle's predicted ETA to next waypoint
-      shuttle._etaSeconds = Math.round((segDuration - elapsed) / 1000);
+      for (let i = 0; i < 2; i++) {
+        const marker = L.marker(area.stops[0], { icon: createCarIcon(area.color) }).addTo(map);
+        const shuttle = { id: `${key[0].toUpperCase()}${i + 1}`, marker, area: key, _currentStop: 0, occupancy: Math.floor(Math.random() * 10) + 1, capacity: 12, status: 'On Route', progress: 0, eta: 0 };
+        shuttles.push(shuttle);
 
-      if (t < 1) {
-        requestAnimationFrame(step);
-      } else {
-        // next segment
-        segIdx = (segIdx + 1) % route.length;
-        from = L.latLng(route[segIdx]);
-        to = L.latLng(route[(segIdx+1) % route.length]);
-        segDist = distanceMeters(from, to);
-        segDuration = (segDist / (speed * 1000 / 3600)) * 1000;
-        startTime = null;
-        shuttle.index = segIdx;
-        // occasionally adjust occupants randomly to look live
-        if (Math.random() < 0.25) {
-          shuttle.occupants = Math.max(0, Math.min(shuttle.capacity, shuttle.occupants + (Math.random() < 0.5 ? -1 : 1)));
-        }
-        requestAnimationFrame(step);
+        const routeControl = L.Routing.control({
+          waypoints: area.stops.map(s => L.latLng(s[0], s[1])),
+          createMarker: () => null,
+          addWaypoints: false,
+          routeWhileDragging: false,
+          draggableWaypoints: false,
+          show: false
+        });
+
+        routeControl.getRouter().route(routeControl.getWaypoints(), function (err, routes) {
+          if (!err && routes.length > 0) {
+            L.polyline(routes[0].coordinates.map(c => [c.lat, c.lng]), { color: area.color, weight: 4, opacity: 0.6 }).addTo(map);
+            animateShuttle(shuttle, routes[0].coordinates);
+          }
+        });
       }
     }
 
-    requestAnimationFrame(step);
-  }
+    function animateShuttle(shuttle, coords) {
+      let index = 0, progress = 0;
+      const speedFactor = 0.022;
+      function move() {
+        const curr = coords[index];
+        const next = coords[(index + 1) % coords.length];
+        progress += speedFactor;
+        if (progress >= 1) { progress = 0; index = (index + 1) % coords.length; }
 
-  // start animations
-  shuttles.forEach(s => animateShuttle(s));
+        const lat = curr.lat + (next.lat - curr.lat) * progress;
+        const lng = curr.lng + (next.lng - curr.lng) * progress;
+        shuttle.marker.setLatLng([lat, lng]);
 
-  // build cards UI and update loop
-  const cardsDiv = document.getElementById('cards');
-  function renderCards(){
-    cardsDiv.innerHTML = '';
-    shuttles.forEach(s=>{
-      const card = document.createElement('div');
-      card.className = 'shuttle-card';
-      card.id = 'card-' + s.id;
-      card.innerHTML = `
-        <h3>Shuttle ${s.id} — ${s.area[0].toUpperCase()+s.area.slice(1)}</h3>
-        <p>Status: <strong style="color:${s.status==='Delayed' ? '#ffb300' : '#00ff88'}">${s.status}</strong></p>
-        <p>Occupancy: <strong>${s.occupants}/${s.capacity}</strong></p>
-        <p>ETA to next waypoint: <strong id="eta-${s.id}">calculating...</strong></p>
-        <p><button data-id="${s.id}" class="btn-focus" style="background:#111; background-color: orange; font-size:20px color: #00ff88;border-radius:8px;padding:6px 8px;border:none;cursor:pointer;">Focus map</button></p>
-      `;
-      cardsDiv.appendChild(card);
-    });
+        const img = shuttle.marker.getElement()?.querySelector('img');
+        if (img) img.style.transform = `rotate(${bearing(L.latLng(curr.lat, curr.lng), L.latLng(next.lat, next.lng))}deg)`;
 
-    // attach focus handlers
-    document.querySelectorAll('.btn-focus').forEach(b=>{
-      b.addEventListener('click', (ev)=>{
-        const id = ev.currentTarget.dataset.id;
-        const sh = shuttles.find(x=>x.id===id);
-        if (sh) map.setView(sh.marker.getLatLng(), 15, { animate:true });
-      });
-    });
-  }
-  renderCards();
+        shuttle.progress = Math.round(((index + progress) / coords.length) * 100);
+        shuttle.eta = Math.max(0, Math.round((coords.length - (index + progress)) / speedFactor));
+        shuttle._currentStop = index;
 
-  // update ETA text every 700ms
-  setInterval(() => {
-    shuttles.forEach(s=>{
-      const etaEl = document.getElementById('eta-' + s.id);
-      if (etaEl) {
-        const sec = s._etaSeconds ?? 0;
-        etaEl.textContent = sec > 60 ? `${Math.round(sec/60)} min` : `${Math.max(0,sec)} s`;
+        requestAnimationFrame(move);
       }
-      // optional: change status if nearing capacity
-      if (s.occupants >= s.capacity) s.status = 'Full';
-      else s.status = 'On Route';
-      const cardHeader = document.querySelector('#card-' + s.id + ' h3');
-      if(cardHeader) cardHeader.style.color = (s.occupants >= s.capacity ? '#ff6b6b' : '#00ff88');
-    });
-  }, 700);
+      move();
+    }
 
-  // area jump select
-  document.getElementById('areaSelect').addEventListener('change', function(){
-    const val = this.value;
-    if (!val) return;
-    const circle = areaLayers[val];
-    if (circle) map.fitBounds(circle.getBounds(), { padding:[60,60] });
-  });
+    function bearing(a, b) {
+      const lat1 = a.lat * Math.PI / 180, lat2 = b.lat * Math.PI / 180, dLon = (b.lng - a.lng) * Math.PI / 180;
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
 
-  // focus next shuttle
-  let focusIndex = 0;
-  document.getElementById('focusNext').addEventListener('click', ()=>{
-    focusIndex = (focusIndex + 1) % shuttles.length;
-    map.setView(shuttles[focusIndex].marker.getLatLng(), 15, { animate:true });
-  });
+    const cardsDiv = document.getElementById('cards');
 
-  // make map responsive when page resizes
-  window.addEventListener('resize', () => { setTimeout(()=> map.invalidateSize(), 300); });
+    function renderCards() {
+      cardsDiv.innerHTML = '';
+      for (let key in pilotAreas) {
+        const card = document.createElement('div');
+        card.className = 'zone-card';
+        card.innerHTML = `<h3>${key.toUpperCase()}</h3><button class="focus-btn" data-zone="${key}">Focus</button>`;
 
-  // initial map fit so we see all areas
-  const group = L.featureGroup(Object.values(areaLayers));
-  map.fitBounds(group.getBounds(), { padding:[60,60] });
+        shuttles.filter(s => s.area === key).forEach(s => {
+          const info = document.createElement('div');
+          info.className = 'shuttle-info';
+          const statusClass = s.occupancy >= s.capacity ? 'shuttle-status-full' : '';
+          info.innerHTML = `
+            <strong>${s.id}</strong> — Status: <span class="${statusClass}">${s.occupancy >= s.capacity ? 'Full' : s.status}</span>,
+            Occupancy: ${s.occupancy}/${s.capacity},
+            ETA: <span id="eta-${s.id}">calculating...</span>
+            <div class="progress-container"><div id="progress-${s.id}" class="progress-bar"></div></div>
+            <div>Next Stop: <strong>${stopNames[s.area][s._currentStop]}</strong></div>
+          `;
+          card.appendChild(info);
+        });
+        cardsDiv.appendChild(card);
+      }
+
+      // Focus button
+      document.querySelectorAll('.focus-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const zone = btn.getAttribute('data-zone');
+          const area = pilotAreas[zone];
+
+          // Zoom to all stops in the zone
+          const latlngs = area.stops.map(s => L.latLng(s[0], s[1]));
+          const bounds = L.latLngBounds(latlngs);
+          map.fitBounds(bounds.pad(0.5));
+
+          // Temporarily highlight zone circle
+          area.circle.setStyle({ color: '#00ff88', fillOpacity: 0.1 });
+          setTimeout(() => {
+            area.circle.setStyle({ color: area.color, fillOpacity: 0.05 });
+          }, 2000);
+        });
+      });
+    }
+
+    renderCards();
+
+    // Update ETA & progress bars
+    setInterval(() => {
+      shuttles.forEach(s => {
+        const etaEl = document.getElementById(`eta-${s.id}`);
+        if (etaEl) etaEl.textContent = s.eta > 60 ? `${Math.round(s.eta / 60)} min` : `${s.eta} s`;
+        const progEl = document.getElementById(`progress-${s.id}`);
+        if (progEl) progEl.style.width = `${s.progress}%`;
+      });
+    }, 500);
+
   </script>
+
 </body>
 </html>

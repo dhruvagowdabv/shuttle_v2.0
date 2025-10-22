@@ -166,7 +166,7 @@
 <li><a href="{% url 'home' %}">Home</a></li>
 <li><a href="{% url 'booking' %}" class="active">Booking</a></li>
 <li><a href="{% url 'track2' %}">Tracking</a></li>
-<li><a href="{% url 'operator' %}">Operator</a></li>
+<li><a href="{% url 'operator' %}" >Operator</a></li>
   {% if user.is_authenticated and user.is_superuser %}
   <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
   {% endif %}
@@ -451,7 +451,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if(data.success){ overlay.style.display="none"; location.reload(); }
       else{ errorMsg.innerText=data.message; errorMsg.style.display="block"; }
     });
-  });
+  })
 
   window.showLogin=showLogin;
   window.showSignup=showSignup;

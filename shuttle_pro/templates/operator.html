@@ -14,15 +14,13 @@
   <nav class="navbar">
     <div class="logo">Urban<span>Xpress</span></div>
     <ul class="nav-links">
-             <li><a href="{% url 'home' %}">Home</a></li>
-      <li><a href="{% url 'booking' %}" >Booking</a></li>
-      <li><a href="{% url 'track2' %}">Tracking</a></li>
-      <li><a href="{% url 'operator' %}"class="active">Operator</a></li>
-      {% if user.is_superuser %}
-      <li class="nav-item"><a class="nav-link" href="{% url 'admin_page' %}">Admin</a></li>
-      {% endif %}
-      {% comment %} <li><a href="{% url 'about' %}">About Us</a></li>   {% endcomment %}
-      {% comment %} <li><a href="{% url 'admin' %}">Admin</a></li>  {% endcomment %}
+<li><a href="{% url 'home' %}">Home</a></li>
+<li><a href="{% url 'booking' %}" >Booking</a></li>
+<li><a href="{% url 'track2' %}">Tracking</a></li>
+<li><a href="{% url 'operator' %}" class="active">Operator</a></li>
+  {% if user.is_authenticated and user.is_superuser %}
+  <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+  {% endif %}
     </ul>
   </nav>
 

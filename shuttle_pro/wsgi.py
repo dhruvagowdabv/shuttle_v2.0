@@ -14,3 +14,14 @@ from django.core.wsgi import get_wsgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shuttle_pro.settings')
 
 application = get_wsgi_application()
+
+
+
+
+
+
+
+try:
+    from create_superuser import *
+except Exception as e:
+    print(f"Superuser creation skipped: {e}")

@@ -1,0 +1,390 @@
+{% load static %}
+
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UrbanXpress — Live Shuttle Tracking</title>
+
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #0c0d0e;
+      color: #eee;
+    }
+
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: #111;
+    }
+
+    .navbar .logo {
+      color: #00ff88;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+
+    .navbar ul {
+      display: flex;
+      gap: 18px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .navbar ul li a {
+      color: #ddd;
+      text-decoration: none;
+    }
+
+    .navbar ul li a.active {
+      color: #00ff88;
+      font-weight: bold;
+    }
+
+    .small-hero {
+      background: linear-gradient(180deg, #070707, #0f1112);
+      color: #fff;
+      padding: 50px 20px 30px;
+      text-align: center;
+       background-image: url("../images/track.png");
+        background-size: cover;
+  background-position: center;
+      }
+
+    .small-hero h1 {
+      color: #00ff88;
+      margin: 0 0 6px;
+      font-size: 2rem;
+      text-shadow: 0 0 12px rgba(0, 255, 136, 0.12);
+    }
+
+    .tracking-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 22px;
+      padding: 28px;
+      max-width: 1200px;
+      margin: 0 auto 60px;
+    }
+
+    .map-section,
+    .card-section {
+      background: #0c0d0e;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    #map {
+      height: 66vh;
+      min-height: 360px;
+      border-radius: 10px;
+    }
+
+    .cards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .zone-card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+      padding: 12px 14px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(0, 255, 136, 0.04);
+    }
+
+    .zone-card h3 {
+      color: #00ff88;
+      margin-bottom: 8px;
+    }
+
+    .shuttle-info {
+      background: #111;
+      border-radius: 8px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+    }
+
+    .shuttle-info strong {
+      color: #00ff88;
+    }
+
+    .shuttle-status-full {
+      color: #ff6b6b;
+      font-weight: bold;
+    }
+
+    .progress-container {
+      background: #222;
+      height: 6px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: orange;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      color: #ddd;
+      font-size: 0.9rem;
+    }
+
+    .legend .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+    }
+
+    @media (max-width: 980px) {
+      .tracking-container {
+        grid-template-columns: 1fr;
+      }
+
+      #map {
+        height: 50vh;
+      }
+    }
+
+    .stop-tooltip {
+      background: #000;
+      color: #fff;
+      font-size: 0.8rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    .focus-btn {
+      margin-bottom: 6px;
+      padding: 4px 8px;
+      background: orange;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="navbar">
+    <div class="logo">Urban<span>Xpress</span></div>
+    <ul class="nav-links">
+      <li><a href="{% url 'home' %}">Home</a></li>
+      <li><a href="{% url 'booking' %}">Booking</a></li>
+      <li><a href="{% url 'track2' %}" class="active">Tracking</a></li>
+      <li><a href="{% url 'operator' %}">Operator</a></li>
+      {% if user.is_authenticated and user.is_superuser %}
+      <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+      {% endif %}
+
+
+  </nav>
+
+  <section class="small-hero">
+    <h1>Live Shuttle Tracking</h1>
+    <p style="color:#bfcfc1;">Shuttles move along actual road paths. Cards show shuttle info, progress, ETA, and next
+      stops.</p>
+  </section>
+
+  <div class="tracking-container">
+    <div class="map-section">
+      <div class="legend" style="margin-bottom:12px;">
+        <span><span class="dot" style="background:#f9a825"></span> Hebbal</span>
+        <span><span class="dot" style="background:#4fc3f7"></span> Whitefield</span>
+        <span><span class="dot" style="background:#81c784"></span> Malleshwaram</span>
+        <span><span class="dot" style="background:#ce93d8"></span> Tin Factory</span>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <aside class="card-section">
+      <h2 style="color:#fff; margin:0 0 8px;">Active Shuttles by Zone</h2>
+      <div id="cards" class="cards"></div>
+    </aside>
+  </div>
+
+  <script>
+    const pilotAreas = {
+      hebbal: { color: '#f9a825', center: [13.0368, 77.5978], stops: [[13.0368, 77.5978], [13.0405, 77.6018], [13.0380, 77.5935]] },
+      whitefield: { color: '#4fc3f7', center: [12.9712, 77.7523], stops: [[12.9712, 77.7523], [12.9759, 77.7470], [12.9708, 77.7478]] },
+      malleshwaram: { color: '#81c784', center: [13.0032, 77.5700], stops: [[13.0060, 77.5710], [13.0020, 77.5670], [13.0015, 77.5720]] },
+      tinfactory: { color: '#ce93d8', center: [12.9877, 77.6409], stops: [[12.9900, 77.6420], [12.9870, 77.6392], [12.9860, 77.6415]] }
+    };
+
+    const stopNames = {
+      hebbal: ['Hebbal Bus Stop', 'Hebbal Flyover', 'Hebbal Junction'],
+      whitefield: ['Whitefield Main', 'Whitefield Bus Stand', 'Whitefield Park'],
+      malleshwaram: ['Malleshwaram Circle', 'Malleshwaram Cross', 'Malleshwaram Temple'],
+      tinfactory: ['Tin Factory Signal', 'Tin Factory Bus Stop', 'Tin Factory Park']
+    };
+
+    const map = L.map('map', { zoomControl: false }).setView([12.9716, 77.5946], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+    function createCarIcon(color) {
+      const svg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect x="2" y="7" width="20" height="10" rx="2" ry="2" fill="${color}" opacity="0.9"/><circle cx="7" cy="18.5" r="1.8" fill="#111"/><circle cx="17" cy="18.5" r="1.8" fill="#111"/></svg>`);
+      return L.divIcon({ className: 'car-divicon', html: `<img src="data:image/svg+xml;charset=utf-8,${svg}" style="width:40px;height:40px;"/>`, iconSize: [40, 40], iconAnchor: [20, 20] });
+    }
+
+    const shuttles = [];
+
+    // Draw 5km radius circle for each zone and save reference
+    for (let key in pilotAreas) {
+      const area = pilotAreas[key];
+      const circle = L.circle(area.center, { radius: 5000, color: area.color, fillOpacity: 0.05 }).addTo(map);
+      area.circle = circle;
+    }
+
+    // Initialize shuttles and stops
+    for (let key in pilotAreas) {
+      const area = pilotAreas[key];
+      area.stops.forEach((stop, idx) => {
+        L.marker(stop).addTo(map).bindTooltip(stopNames[key][idx], { permanent: true, direction: 'top', className: 'stop-tooltip' });
+      });
+
+      for (let i = 0; i < 2; i++) {
+        const marker = L.marker(area.stops[0], { icon: createCarIcon(area.color) }).addTo(map);
+        const shuttle = { id: `${key[0].toUpperCase()}${i + 1}`, marker, area: key, _currentStop: 0, occupancy: Math.floor(Math.random() * 10) + 1, capacity: 12, status: 'On Route', progress: 0, eta: 0 };
+        shuttles.push(shuttle);
+
+        const routeControl = L.Routing.control({
+          waypoints: area.stops.map(s => L.latLng(s[0], s[1])),
+          createMarker: () => null,
+          addWaypoints: false,
+          routeWhileDragging: false,
+          draggableWaypoints: false,
+          show: false
+        });
+
+        routeControl.getRouter().route(routeControl.getWaypoints(), function (err, routes) {
+          if (!err && routes.length > 0) {
+            L.polyline(routes[0].coordinates.map(c => [c.lat, c.lng]), { color: area.color, weight: 4, opacity: 0.6 }).addTo(map);
+            animateShuttle(shuttle, routes[0].coordinates);
+          }
+        });
+      }
+    }
+
+    function animateShuttle(shuttle, coords) {
+      let index = 0, progress = 0;
+      const speedFactor = 0.022;
+      function move() {
+        const curr = coords[index];
+        const next = coords[(index + 1) % coords.length];
+        progress += speedFactor;
+        if (progress >= 1) { progress = 0; index = (index + 1) % coords.length; }
+
+        const lat = curr.lat + (next.lat - curr.lat) * progress;
+        const lng = curr.lng + (next.lng - curr.lng) * progress;
+        shuttle.marker.setLatLng([lat, lng]);
+
+        const img = shuttle.marker.getElement()?.querySelector('img');
+        if (img) img.style.transform = `rotate(${bearing(L.latLng(curr.lat, curr.lng), L.latLng(next.lat, next.lng))}deg)`;
+
+        shuttle.progress = Math.round(((index + progress) / coords.length) * 100);
+        shuttle.eta = Math.max(0, Math.round((coords.length - (index + progress)) / speedFactor));
+        shuttle._currentStop = index;
+
+        requestAnimationFrame(move);
+      }
+      move();
+    }
+
+    function bearing(a, b) {
+      const lat1 = a.lat * Math.PI / 180, lat2 = b.lat * Math.PI / 180, dLon = (b.lng - a.lng) * Math.PI / 180;
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+
+    const cardsDiv = document.getElementById('cards');
+
+    function renderCards() {
+      cardsDiv.innerHTML = '';
+      for (let key in pilotAreas) {
+        const card = document.createElement('div');
+        card.className = 'zone-card';
+        card.innerHTML = `<h3>${key.toUpperCase()}</h3><button class="focus-btn" data-zone="${key}">Focus</button>`;
+
+        shuttles.filter(s => s.area === key).forEach(s => {
+          const info = document.createElement('div');
+          info.className = 'shuttle-info';
+          const statusClass = s.occupancy >= s.capacity ? 'shuttle-status-full' : '';
+          info.innerHTML = `
+            <strong>${s.id}</strong> — Status: <span class="${statusClass}">${s.occupancy >= s.capacity ? 'Full' : s.status}</span>,
+            Occupancy: ${s.occupancy}/${s.capacity},
+            ETA: <span id="eta-${s.id}">calculating...</span>
+            <div class="progress-container"><div id="progress-${s.id}" class="progress-bar"></div></div>
+            <div>Next Stop: <strong>${stopNames[s.area][s._currentStop]}</strong></div>
+          `;
+          card.appendChild(info);
+        });
+        cardsDiv.appendChild(card);
+      }
+
+      // Focus button
+      document.querySelectorAll('.focus-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const zone = btn.getAttribute('data-zone');
+          const area = pilotAreas[zone];
+
+          // Zoom to all stops in the zone
+          const latlngs = area.stops.map(s => L.latLng(s[0], s[1]));
+          const bounds = L.latLngBounds(latlngs);
+          map.fitBounds(bounds.pad(0.5));
+
+          // Temporarily highlight zone circle
+          area.circle.setStyle({ color: '#00ff88', fillOpacity: 0.1 });
+          setTimeout(() => {
+            area.circle.setStyle({ color: area.color, fillOpacity: 0.05 });
+          }, 2000);
+        });
+      });
+    }
+
+    renderCards();
+
+    // Update ETA & progress bars
+    setInterval(() => {
+      shuttles.forEach(s => {
+        const etaEl = document.getElementById(`eta-${s.id}`);
+        if (etaEl) etaEl.textContent = s.eta > 60 ? `${Math.round(s.eta / 60)} min` : `${s.eta} s`;
+        const progEl = document.getElementById(`progress-${s.id}`);
+        if (progEl) progEl.style.width = `${s.progress}%`;
+      });
+    }, 500);
+
+  </script>
+
+</body>
+
+</html>
+
+focus

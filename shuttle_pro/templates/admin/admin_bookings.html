@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Bookings | ShuttlePro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; font-family:"Poppins",sans-serif; background:black; color:#1e293b; }
+    nav { background:#00ff88; color:white; display:flex; justify-content:space-between; align-items:center; padding:1rem 2rem; }
+    .logo { font-size:1.5rem; font-weight:600; }
+    .logout { background:#ef4444; color:white; border:none; border-radius:8px; padding:0.5rem 1rem; cursor:pointer; }
+    .container { padding:2rem; max-width:1400px; margin:auto; }
+    h2 { color:#00ff88; margin-bottom:1rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1.5rem; margin-top:1rem; }
+    .card { background:white; padding:1.5rem; border-radius:12px; box-shadow:0 4px 8px rgba(0,0,0,0.1); text-align:center; transition:0.3s; }
+    .card:hover { transform: translateY(-5px); box-shadow:0 8px 16px rgba(0,0,0,0.15); }
+    table { width:100%; border-collapse:collapse; margin-top:2rem; background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 8px rgba(0,0,0,0.1); }
+    th, td { padding:0.75rem 1rem; text-align:left; border-bottom:1px solid #e2e8f0; }
+    th { background:#00ff88; color:white; position:sticky; top:0; z-index:1; }
+    tr:nth-child(even) { background:#f1f5f9; }
+    tr:hover { background:#e2e8f0; }
+    .status-badge { padding:0.25rem 0.5rem; border-radius:8px; font-weight:500; color:white; text-align:center; display:inline-block; }
+    .Confirmed { background:#3b82f6; }
+    .Pending { background:#facc15; color:#1e293b; }
+    .Canceled { background:#ef4444; }
+    .nav-links { display:flex; gap:1rem; align-items:center; }
+    .nav-links a { color:white; text-decoration:none; font-weight:500; }
+    .nav-links a:hover { text-decoration:underline; }
+    .filters { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem; align-items:flex-end; }
+    .filters select { padding:0.5rem; border-radius:6px; border:1px solid #cbd5e1; }
+    .action-btn { padding:0.35rem 0.7rem; border:none; border-radius:6px; cursor:pointer; color:white; }
+    .cancel-btn { background:#ef4444; }
+    canvas { max-width:100%; height:auto; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="logo">ShuttlePro Admin</div>
+  <div class="nav-links">
+    <a href="{% url 'admin_dashboard' %}">Dashboard</a>
+    <a href="{% url 'admin_bookings' %}">Bookings</a>
+    <a href="{% url 'admin_logs' %}">Logs</a>
+    <form method="POST" action="{% url 'logout' %}" style="display:inline;">
+      {% csrf_token %}
+      <button class="logout">Logout</button>
+    </form>
+  </div>
+</nav>
+
+<div class="container">
+  <h2>Booking Management 👋</h2>
+
+  <!-- Filters -->
+  <form method="get" class="filters" id="filterForm">
+    <div>
+      <label>Zone</label>
+      <select name="zone" id="zoneFilter">
+        <option value="">All</option>
+        {% for zone in zones %}
+        <option value="{{ zone }}" {% if zone_filter == zone %}selected{% endif %}>{{ zone }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="status" id="statusFilter">
+        <option value="">All</option>
+        <option value="Confirmed" {% if status_filter == "Confirmed" %}selected{% endif %}>Confirmed</option>
+        <option value="Pending" {% if status_filter == "Pending" %}selected{% endif %}>Pending</option>
+        <option value="Canceled" {% if status_filter == "Canceled" %}selected{% endif %}>Canceled</option>
+      </select>
+    </div>
+    <div>
+      <label>Date</label>
+      <select name="date" id="dateFilter">
+        <option value="">All</option>
+        <option value="today" {% if date_filter == "today" %}selected{% endif %}>Today</option>
+        <option value="week" {% if date_filter == "week" %}selected{% endif %}>This Week</option>
+        <option value="month" {% if date_filter == "month" %}selected{% endif %}>This Month</option>
+      </select>
+    </div>
+  </form>
+
+  <!-- Summary Cards -->
+  <div class="grid">
+    <div class="card">
+      <h3>Total Bookings</h3>
+      <p id="totalBookings">{{ total_bookings }}</p>
+    </div>
+    <div class="card Confirmed">
+      <h3>Confirmed</h3>
+      <p id="confirmedCount">{{ approved_count }}</p>
+    </div>
+    <div class="card Pending">
+      <h3>Pending</h3>
+      <p id="pendingCount">{{ pending_count }}</p>
+    </div>
+    <div class="card Canceled">
+      <h3>Cancelled</h3>
+      <p id="canceledCount">{{ cancelled_count }}</p>
+    </div>
+    <div class="card">
+      <h3>Total Seats</h3>
+      <p id="totalSeats">{{ total_seats }}</p>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid" style="margin-top:2rem; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:1.5rem;">
+    <div class="card">
+      <h3>Bookings per Zone</h3>
+      <canvas id="zoneChart"></canvas>
+    </div>
+    <div class="card">
+      <h3>Payment Method Distribution</h3>
+      <canvas id="paymentChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Recent Bookings Table -->
+  <h2 style="margin-top: 2rem;">Recent Bookings</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Passenger</th>
+        <th>Zone</th>
+        <th>Pickup</th>
+        <th>Drop</th>
+        <th>Seats</th>
+        <th>Payment</th>
+        <th>Status</th>
+        <th>Created At</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="bookingTable">
+      {% for b in recent_bookings %}
+      <tr data-id="{{ b.id }}">
+        <td>{{ b.passenger_name }}</td>
+        <td>{{ b.zone }}</td>
+        <td>{{ b.pickup_location }}</td>
+        <td>{{ b.drop_location }}</td>
+        <td>{{ b.seats }}</td>
+        <td>{{ b.payment_method }}</td>
+        <td><span class="status-badge {{ b.status }}">{{ b.status }}</span></td>
+        <td>{{ b.created_at|date:"M d, Y H:i" }}</td>
+        <td>
+          {% if b.status != "Canceled" %}
+          <button class="action-btn cancel-btn" onclick="cancelBooking({{ b.id }})">Cancel</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="9" style="text-align:center;">No bookings found</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const zoneChart = new Chart(document.getElementById('zoneChart').getContext('2d'), {
+  type: 'pie',
+  data: {
+    labels: {{ zone_chart_labels|safe }},
+    datasets: [{ data: {{ zone_chart_values|safe }}, backgroundColor:['#3b82f6','#22c55e','#facc15','#ef4444','#8b5cf6','#f472b6'] }]
+  },
+  options:{ responsive:true, plugins:{ legend:{position:'bottom'} } }
+});
+
+const paymentChart = new Chart(document.getElementById('paymentChart').getContext('2d'), {
+  type: 'doughnut',
+  data: {
+    labels: {{ payment_chart_labels|safe }},
+    datasets: [{ data: {{ payment_chart_values|safe }}, backgroundColor:['#3b82f6','#22c55e','#facc15','#ef4444','#8b5cf6','#f472b6'] }]
+  },
+  options:{ responsive:true, plugins:{ legend:{position:'bottom'} } }
+});
+
+// Cancel booking
+function cancelBooking(id){
+  fetch(`/admin-panel/bookings/cancel/${id}/`, {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'}})
+  .then(res=>res.json())
+  .then(data=>{
+    if(data.success) fetchBookings();
+  });
+}
+
+// Fetch latest bookings dynamically
+function fetchBookings(){
+  fetch(`/admin-panel/bookings/fetch_latest/`)
+  .then(res=>res.json())
+  .then(data=>{
+    const tbody = document.getElementById('bookingTable');
+    tbody.innerHTML = '';
+    data.bookings.forEach(b=>{
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-id', b.id);
+      tr.innerHTML = `
+        <td>${b.passenger_name}</td>
+        <td>${b.zone}</td>
+        <td>${b.pickup}</td>
+        <td>${b.drop}</td>
+        <td>${b.seats}</td>
+        <td>${b.payment}</td>
+        <td><span class="status-badge ${b.status}">${b.status}</span></td>
+        <td>${b.created}</td>
+        <td>${b.status != "Canceled" ? `<button class="action-btn cancel-btn" onclick="cancelBooking(${b.id})">Cancel</button>` : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Update summary cards
+    document.getElementById('totalBookings').textContent = data.counts.total;
+    document.getElementById('confirmedCount').textContent = data.counts.approved;
+    document.getElementById('pendingCount').textContent = data.counts.pending;
+    document.getElementById('canceledCount').textContent = data.counts.canceled;
+
+    // Update charts
+    zoneChart.data.labels = data.zone_chart.labels;
+    zoneChart.data.datasets[0].data = data.zone_chart.values;
+    zoneChart.update();
+
+    paymentChart.data.labels = data.payment_chart.labels;
+    paymentChart.data.datasets[0].data = data.payment_chart.values;
+    paymentChart.update();
+  });
+}
+
+// Auto-refresh every 10 sec
+setInterval(fetchBookings, 2000);
+
+// Filters
+document.getElementById('zoneFilter').addEventListener('change', ()=>document.getElementById('filterForm').submit());
+document.getElementById('statusFilter').addEventListener('change', ()=>document.getElementById('filterForm').submit());
+document.getElementById('dateFilter').addEventListener('change', ()=>document.getElementById('filterForm').submit());
+</script>
+</body>
+</html>

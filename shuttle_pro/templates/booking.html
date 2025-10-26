@@ -1,0 +1,462 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UrbanXpress | Booking</title>
+
+<!-- CSS -->
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Leaflet Routing Machine -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+<style>
+
+
+.booking-container {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 40px;
+  padding: 50px;
+  max-width: 1200px;
+  margin: auto;
+}
+.booking-form,.map-container {
+  background:#111;
+  padding:25px;
+  border-radius:12px;
+  box-shadow:0 0 15px rgba(0,255,136,0.2);
+  color:#eee;
+}
+.booking-form h2,.map-container h2 {
+  margin-bottom:20px;
+  color:#00ff88;
+  text-shadow:0 0 8px #00ff88;
+}
+.booking-form label {
+  display:block;
+  margin:12px 0 5px;
+  font-weight:bold;
+  color:#ddd;
+}
+.booking-form input,.booking-form select {
+  width:100%;
+  padding:10px;
+  border-radius:6px;
+  border:none;
+  margin-bottom:15px;
+  outline:none;
+  font-size:1rem;
+  background:#111;
+  color:#eee;
+}
+.booking-form button {
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  background:#00ff88;
+  border:none;
+  border-radius:8px;
+  font-size:1rem;
+  font-weight:bold;
+  cursor:pointer;
+}
+#map {
+  width:100%;
+  height:350px;
+  border-radius:10px;
+  margin-bottom:15px;
+}
+.ticket {
+  margin-top:20px;
+  padding:16px;
+  border-radius:12px;
+  background:linear-gradient(135deg,#1a1a1a,#0c0c0c);
+  color:#eee;
+  box-shadow:0 6px 20px rgba(0,0,0,0.6);
+  border-left:5px solid #00ff88;
+  display:none;
+  animation:fadeIn .5s ease-in-out;
+}
+.ticket h3 { color:#00ff88;margin-bottom:8px;}
+.ticket p { margin:6px 0;font-size:.95rem;}
+.overlay {
+  position:fixed;
+  top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.8);
+  display:none;
+  justify-content:center;
+  align-items:center;
+  z-index:999;
+}
+.auth-box {
+  background:#111;
+  padding:30px;
+  border-radius:12px;
+  box-shadow:0 0 20px #00ff88;
+  width:300px;
+  color:#eee;
+}
+.auth-box h2 {
+  margin-bottom:15px;
+  color:#00ff88;
+  text-align:center;
+}
+.auth-box input {
+  width:100%;
+  padding:10px;
+  margin-bottom:10px;
+  border:none;
+  border-radius:6px;
+  background:#222;
+  color:#eee;
+}
+.auth-box button {
+  width:100%;
+  padding:10px;
+  background:#00ff88;
+  border:none;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+}
+.tab-buttons {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:15px;
+}
+.tab-buttons button {
+  width:49%;
+  padding:8px;
+  border:none;
+  background:#222;
+  color:#eee;
+  cursor:pointer;
+  border-radius:6px;
+}
+.tab-buttons button.active {
+  background:#00ff88;
+  color:#111;
+}
+.error-msg {
+  color: #ff4d4d;
+  margin-bottom:10px;
+  font-size:0.9rem;
+  display:none;
+}
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+@media(max-width:900px){.booking-container{grid-template-columns:1fr;}}
+</style>
+</head>
+
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+<div class="logo">Urban<span>Xpress</span></div>
+<ul class="nav-links">
+<li><a href="{% url 'home' %}">Home</a></li>
+<li><a href="{% url 'booking' %}" class="active">Booking</a></li>
+<li><a href="{% url 'track2' %}">Tracking</a></li>
+<li><a href="{% url 'operator' %}" >Operator</a></li>
+  {% if user.is_authenticated and user.is_superuser %}
+  <li><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+  {% endif %}
+</ul>
+</nav>
+
+<!-- Hero -->
+<section class="hero small-hero">
+<h1>Book Your Shuttle</h1>
+<p>Fast, reliable, and eco-friendly rides at your fingertips.</p>
+</section>
+
+<!-- Booking Container -->
+<section class="booking-container">
+<div class="booking-form">
+<h2>Reserve Your Ride</h2>
+<form id="bookingForm">
+{% comment %} <label id="pass">Passenger Name</label> {% endcomment %}
+<input type="text" id="username" placeholder="Enter your name" value="{{ request.user.username }}" {% if request.user.is_authenticated %}readonly{% endif %} required>
+
+<label>Zone</label>
+<select id="zoneSelect" required>
+<option value="">Select Zone</option>
+<option value="hebbal">🟡 Hebbal</option>
+<option value="whitefield">🔵 Whitefield</option>
+<option value="malleshwaram">🟢 Malleshwaram</option>
+<option value="tinfactory">🟣 Tinfactory</option>
+</select>
+
+<label>Pickup Location</label>
+<select id="pickup" required></select>
+
+<label>Drop Location</label>
+<select id="drop" required></select>
+
+<label>Seats</label>
+<input type="number" id="seats" min="1" max="6" value="1" required>
+
+<label>Payment Method</label>
+<select id="payment" required>
+<option value="UPI">UPI</option>
+<option value="Cash">Cash</option>
+</select>
+
+<button type="submit" id="bookBtn">Book Now</button>
+</form>
+<div class="ticket" id="ticket"></div>
+</div>
+
+<div class="map-container">
+<h2>Select Locations</h2>
+<div id="map"></div>
+</div>
+</section>
+
+<!-- Login/Signup Popup -->
+<div class="overlay" id="overlay">
+  <div class="auth-box" onclick="event.stopPropagation()">
+    <div class="tab-buttons">
+      <button id="loginTab" class="active" onclick="showLogin()">Login</button>
+      <button id="signupTab" onclick="showSignup()">Sign Up</button>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="form-container" id="loginForm">
+      <h2>Welcome Back</h2>
+      <input type="text" placeholder="Username" id="loginUsername"/>
+      <input type="password" placeholder="Password" id="loginPassword"/>
+      <button type="button" id="loginSubmit">Login</button>
+    </div>
+
+    <div class="form-container" id="signupForm" style="display:none;">
+      <h2>Create Account</h2>
+      <input type="text" placeholder="Username" id="signupUsername"/>
+      <input type="email" placeholder="Email" id="signupEmail"/>
+      <input type="password" placeholder="Password" id="signupPassword"/>
+      <button type="button" id="signupSubmit">Sign Up</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  // ---- Login/Signup Overlay ----
+  const overlay = document.getElementById("overlay");
+  const loginFormDiv = document.getElementById("loginForm");
+  const signupFormDiv = document.getElementById("signupForm");
+  const errorMsg = document.getElementById("errorMsg");
+
+  function showLogin(){
+    loginFormDiv.style.display="block";
+    signupFormDiv.style.display="none";
+    document.getElementById("loginTab").classList.add("active");
+    document.getElementById("signupTab").classList.remove("active");
+    errorMsg.style.display="none";
+  }
+  function showSignup(){
+    loginFormDiv.style.display="none";
+    signupFormDiv.style.display="block";
+    document.getElementById("signupTab").classList.add("active");
+    document.getElementById("loginTab").classList.remove("active");
+    errorMsg.style.display="none";
+  }
+
+  function showOverlay(msg=""){
+    overlay.style.display="flex";
+    if(msg){ errorMsg.innerText=msg; errorMsg.style.display="block"; }
+  }
+
+  overlay.addEventListener("click",(e)=>{ if(e.target.id==="overlay"){ overlay.style.display="none"; } });
+
+  // ---- Map + Zone Logic ----
+  const pilotAreas = {
+    hebbal: {center:[13.0358,77.5970], color:'#f9a825', stops:[
+      {name:"Hebbal Flyover", lat:13.037, lng:77.596},
+      {name:"Manyata Tech Park", lat:13.040, lng:77.602},
+      {name:"Yeshwanthpur", lat:13.024, lng:77.568}
+    ]},
+    whitefield:{center:[12.9698,77.7500], color:'#4fc3f7', stops:[
+      {name:"ITPL", lat:12.972, lng:77.750},
+      {name:"Whitefield Bus Stop", lat:12.965, lng:77.752},
+      {name:"Phoenix Market City", lat:12.970, lng:77.757}
+    ]},
+    malleshwaram:{center:[13.0033,77.5690], color:'#81c784', stops:[
+      {name:"Saraswathi Puram", lat:13.005, lng:77.569},
+      {name:"Malleswaram Clock Tower", lat:13.003, lng:77.570},
+      {name:"Yeshwanthpur Metro", lat:13.010, lng:77.567}
+    ]},
+    tinfactory:{center:[12.9881,77.6406], color:'#ce93d8', stops:[
+      {name:"KR Market", lat:12.985, lng:77.640},
+      {name:"Tannery Road", lat:12.990, lng:77.645},
+      {name:"Cantonment", lat:12.992, lng:77.642}
+    ]}
+  };
+
+  let map = L.map('map').setView([12.9716,77.5946],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+
+  let selectedZone=null;
+  let pickupSelect=document.getElementById("pickup");
+  let dropSelect=document.getElementById("drop");
+  let zoneSelect=document.getElementById("zoneSelect");
+  let ticket=document.getElementById("ticket");
+
+  let stopMarkers=[], routeControl=null, zoneCircle=null;
+  let lastSelected="pickup";
+
+  pickupSelect.addEventListener("focus",()=>{ lastSelected="pickup"; });
+  dropSelect.addEventListener("focus",()=>{ lastSelected="drop"; });
+
+  zoneSelect.addEventListener("change",()=>{
+    selectedZone=zoneSelect.value;
+    pickupSelect.innerHTML=""; dropSelect.innerHTML="";
+    stopMarkers.forEach(m=>map.removeLayer(m)); stopMarkers=[];
+    if(zoneCircle) map.removeLayer(zoneCircle);
+    if(routeControl) map.removeControl(routeControl); routeControl=null;
+    if(!selectedZone) return;
+
+    let area=pilotAreas[selectedZone];
+    zoneCircle=L.circle(area.center,{radius:5000,color:area.color,fillColor:area.color,fillOpacity:0.1}).addTo(map);
+
+    area.stops.forEach((s,i)=>{
+      let opt1=document.createElement("option"); opt1.value=i; opt1.text=s.name; pickupSelect.add(opt1);
+      let opt2=document.createElement("option"); opt2.value=i; opt2.text=s.name; dropSelect.add(opt2);
+
+      let marker=L.circleMarker([s.lat,s.lng],{color:area.color,fillColor:area.color,radius:8}).addTo(map);
+      marker.bindTooltip(s.name,{permanent:false,direction:'top',offset:[0,-10]});
+      marker.index=i;
+      marker.on("click",()=>{
+        if(lastSelected==="pickup") pickupSelect.value=i;
+        else dropSelect.value=i;
+        if(pickupSelect.value===dropSelect.value && pickupSelect.value!==""){ 
+          if(lastSelected==="pickup") dropSelect.value="";
+          else pickupSelect.value="";
+        }
+        stopMarkers.forEach(m=>m.setStyle({fillColor:area.color}));
+        marker.setStyle({fillColor:"#00ff88"});
+        updateRoute();
+      });
+      stopMarkers.push(marker);
+    });
+
+    map.fitBounds(zoneCircle.getBounds());
+  });
+
+  pickupSelect.addEventListener("change",()=>{ stopMarkers.forEach(m=>m.setStyle({fillColor:pilotAreas[selectedZone].color})); 
+    if(pickupSelect.value!=="") stopMarkers[pickupSelect.value].setStyle({fillColor:"#00ff88"});
+    updateRoute();
+  });
+  dropSelect.addEventListener("change",()=>{ stopMarkers.forEach(m=>m.setStyle({fillColor:pilotAreas[selectedZone].color})); 
+    if(dropSelect.value!=="") stopMarkers[dropSelect.value].setStyle({fillColor:"#00ff88"});
+    updateRoute();
+  });
+
+  function updateRoute(){
+    if(routeControl) map.removeControl(routeControl);
+    if(pickupSelect.value!=="" && dropSelect.value!==""){
+      let start=pilotAreas[selectedZone].stops[pickupSelect.value];
+      let end=pilotAreas[selectedZone].stops[dropSelect.value];
+      routeControl=L.Routing.control({
+        waypoints:[L.latLng(start.lat,start.lng), L.latLng(end.lat,end.lng)],
+        lineOptions:{styles:[{color:pilotAreas[selectedZone].color,weight:5,opacity:0.6}]},
+        addWaypoints:false,
+        draggableWaypoints:false,
+        createMarker:()=>null,
+        routeWhileDragging:false,
+        show:false
+      }).addTo(map);
+    }
+  }
+
+  // ---- Booking form with backend ----
+  document.getElementById("bookingForm").addEventListener("submit", e=>{
+    e.preventDefault();
+    const isAuthenticated = {{ request.user.is_authenticated|yesno:"true,false" }};
+    if(!isAuthenticated){
+      showOverlay("You are in guest mode. Please login/signup to book a ticket.");
+      return;
+    }
+
+    const data = {
+      passenger_name: document.getElementById("username").value,
+      zone: selectedZone,
+      pickup_location: pickupSelect.options[pickupSelect.value]?.text || "",
+      drop_location: dropSelect.options[dropSelect.value]?.text || "",
+      seats: document.getElementById("seats").value,
+      payment_method: document.getElementById("payment").value
+    };
+
+    fetch("{% url 'create_booking' %}", {
+      method:"POST",
+      headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+      body: JSON.stringify(data)
+    }).then(res=>res.json()).then(resp=>{
+      if(resp.success){
+        ticket.innerHTML = `
+          <h3>🎫 Shuttle Ticket</h3>
+          <p><strong>Name:</strong> ${data.passenger_name}</p>
+          <p><strong>Zone:</strong> ${data.zone.toUpperCase()}</p>
+          <p><strong>From:</strong> ${data.pickup_location}</p>
+          <p><strong>To:</strong> ${data.drop_location}</p>
+          <p><strong>Seats:</strong> ${data.seats}</p>
+          <p><strong>Payment:</strong> ${data.payment_method}</p>
+          <p style="color:#00ff88;"><strong>Status:</strong> Confirmed ✅</p>
+        `;
+        ticket.style.display="block";
+        ticket.scrollIntoView({behavior:"smooth"});
+      } else {
+        alert(resp.message);
+      }
+    });
+  });
+
+  // ---- AJAX Login ----
+  document.getElementById("loginSubmit").addEventListener("click",()=>{
+    const username=document.getElementById("loginUsername").value;
+    const password=document.getElementById("loginPassword").value;
+
+    fetch("{% url 'login' %}",{
+      method:"POST",
+      headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+      body:JSON.stringify({username,password})
+    }).then(res=>res.json()).then(data=>{
+      if(data.success){ overlay.style.display="none"; location.reload(); }
+      else{ errorMsg.innerText=data.message; errorMsg.style.display="block"; }
+    });
+  });
+
+  // ---- AJAX Signup ----
+  document.getElementById("signupSubmit").addEventListener("click",()=>{
+    const username=document.getElementById("signupUsername").value;
+    const email=document.getElementById("signupEmail").value;
+    const password=document.getElementById("signupPassword").value;
+
+    fetch("{% url 'signup' %}",{
+      method:"POST",
+      headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+      body:JSON.stringify({username,email,password})
+    }).then(res=>res.json()).then(data=>{
+      if(data.success){ overlay.style.display="none"; location.reload(); }
+      else{ errorMsg.innerText=data.message; errorMsg.style.display="block"; }
+    });
+  })
+
+  window.showLogin=showLogin;
+  window.showSignup=showSignup;
+});
+</script>
+
+</body>
+</html>
